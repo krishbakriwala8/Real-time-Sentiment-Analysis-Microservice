@@ -1,0 +1,16 @@
+sentiment-service/
+├── app/
+│   ├── __init__.py
+│   ├── api.py                 # FastAPI application and endpoints
+│   ├── model.py                # Model loading and inference logic
+│   ├── preprocess.py           # Text preprocessing functions
+│   ├── config.py               # Configuration (model name, settings)
+│   └── schemas.py              # Pydantic request/response models
+├── tests/
+│   ├── test_api.py             # Unit tests for API
+│   └── test_model.py           # Unit tests for model inference
+├── requirements.txt
+├── Dockerfile
+├── .gitignore
+├── README.md
+└── API_DOCS.md

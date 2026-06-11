@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+
+# Testing / coverage
+.coverage
+.pytest_cache/
+htmlcov/
+
+# Benchmarking & model artifacts
+benchmark_results/
+fine_tuned_model/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

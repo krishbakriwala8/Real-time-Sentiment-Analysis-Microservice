@@ -1,0 +1,100 @@
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Real-Time Sentiment Microservice — Full Docker Stack
+#
+# Services
+# ────────
+#   db          PostgreSQL 16 — persistent storage for predictions & benchmarks
+#   api         FastAPI + BERT sentiment service
+#   db-init     One-shot container that runs Alembic migrations on first boot
+#
+# Quick start
+# ───────────
+#   cp .env.example .env
+#   docker compose up --build
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: sentiment_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sentiment_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sentiment_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-sentiment_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sentiment_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── API service ─────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: sentiment_api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8000
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+      # Model — downloads from HuggingFace Hub on first start
+      MODEL_NAME: ${MODEL_NAME:-distilbert-base-uncased-finetuned-sst-2-english}
+      FINE_TUNED_MODEL_PATH: ${FINE_TUNED_MODEL_PATH:-}
+      MAX_SEQUENCE_LENGTH: ${MAX_SEQUENCE_LENGTH:-512}
+      INFERENCE_BATCH_SIZE: ${INFERENCE_BATCH_SIZE:-16}
+      CONFIDENCE_THRESHOLD: ${CONFIDENCE_THRESHOLD:-0.6}
+
+      # Database
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-sentiment_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sentiment_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-sentiment_db}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-sentiment_user}:${POSTGRES_PASSWORD:-sentiment_pass}@db:5432/${POSTGRES_DB:-sentiment_db}
+
+      # Benchmarking
+      LATENCY_TARGET_MS: ${LATENCY_TARGET_MS:-200}
+      BENCHMARK_SAMPLE_SIZE: ${BENCHMARK_SAMPLE_SIZE:-500}
+      BENCHMARK_RESULTS_DIR: /app/benchmark_results
+
+      # HuggingFace cache
+      TRANSFORMERS_CACHE: /app/.cache/huggingface
+      HF_HOME: /app/.cache/huggingface
+
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist model cache across container restarts — avoids re-downloading BERT
+      - hf_model_cache:/app/.cache/huggingface
+      # Persist benchmark charts and JSON reports
+      - benchmark_results:/app/benchmark_results
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s   # give BERT time to load on first run
+      retries: 3
+
+# ─── Volumes ──────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+  hf_model_cache:
+    driver: local
+  benchmark_results:
+    driver: local
